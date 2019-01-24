@@ -19,6 +19,11 @@ import com.yahoo.memory.WritableMemory;
 interface ConcurrentSharedThetaSketch {
 
   long NOT_SINGLE_HASH = -1L;
+  double ERROR = 0.05;
+
+  static long getLimit(long k) {
+    return Math.min((2 * k), (long)Math.ceil(1.0/Math.pow(ERROR, 2.0)));
+  }
 
   /**
    * Completes the propagation: end mutual exclusion block.
@@ -104,6 +109,17 @@ interface ConcurrentSharedThetaSketch {
    */
   void propagate(final AtomicBoolean localPropagationInProgress, final Sketch sketchIn,
       final long singleHash);
+
+  default long getExactLimit() {
+    final long k = calcK();
+    return getLimit(k);
+  }
+
+  long calcK();
+
+  // ----------------------------------
+  // Methods for tests
+  // ----------------------------------
 
   /**
    * Serialize this sketch to a byte array form.
