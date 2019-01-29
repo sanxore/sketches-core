@@ -115,11 +115,6 @@ class ConcurrentDirectThetaSketch extends DirectQuickSelectSketch
    * @param dstOrdered <a href="{@docRoot}/resources/dictionary.html#dstOrdered">See Destination Ordered</a>
    * @param dstMem     <a href="{@docRoot}/resources/dictionary.html#dstMem">See Destination Memory</a>.
    * @return this sketch as a CompactSketch in the chosen form
-=======
-  /**
-   * Ensures mutual exclusion. No other thread can update the shared sketch while propagation is
-   * in progress
->>>>>>> remove cache limit, add concurrency error factor
    */
   @Override
   public CompactSketch compactShared(final boolean dstOrdered, final WritableMemory dstMem) {
