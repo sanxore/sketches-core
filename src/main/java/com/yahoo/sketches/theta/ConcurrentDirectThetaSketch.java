@@ -25,6 +25,7 @@ class ConcurrentDirectThetaSketch extends DirectQuickSelectSketch
   private volatile double volatileEstimate_;
   // Num of retained entries in which the sketch toggles from sync (exact) mode to async propagation mode
   private final long exactLimit_;
+  private final double maxConcurrencyError_;
   // A flag to coordinate between several propagation threads
   private final AtomicBoolean sharedPropagationInProgress_;
   // An epoch defines an interval between two resets. A propagation invoked at epoch i cannot
@@ -36,16 +37,18 @@ class ConcurrentDirectThetaSketch extends DirectQuickSelectSketch
    *
    * @param lgNomLongs <a href="{@docRoot}/resources/dictionary.html#lgNomLongs">See lgNomLongs</a>.
    * @param seed       <a href="{@docRoot}/resources/dictionary.html#seed">See Update Hash Seed</a>.
+   * @param maxConcurrencyError
    * @param dstMem     the given Memory object destination. It cannot be null.
-   *                   The hash table area will be cleared prior to use.
    */
-  ConcurrentDirectThetaSketch(final int lgNomLongs, final long seed, final WritableMemory dstMem) {
+  ConcurrentDirectThetaSketch(final int lgNomLongs, final long seed, double maxConcurrencyError,
+                              final WritableMemory dstMem) {
     super(lgNomLongs, seed, 1.0F, //p
         ResizeFactor.X1, //rf,
         null, dstMem, false);
 
     volatileThetaLong_ = Long.MAX_VALUE;
     volatileEstimate_ = 0;
+    maxConcurrencyError_ = maxConcurrencyError;
     exactLimit_ = getExactLimit();
     sharedPropagationInProgress_ = new AtomicBoolean(false);
     epoch_ = 0;
@@ -101,7 +104,6 @@ class ConcurrentDirectThetaSketch extends DirectQuickSelectSketch
   /**
    * Convert this UpdateSketch to a CompactSketch in the chosen form.
    *
-<<<<<<< HEAD
    * <p>This compacting process converts the hash table form of an UpdateSketch to
    * a simple list of the valid hash values from the hash table.  Any hash values equal to or
    * greater than theta will be discarded.  The number of valid values remaining in the
@@ -113,6 +115,11 @@ class ConcurrentDirectThetaSketch extends DirectQuickSelectSketch
    * @param dstOrdered <a href="{@docRoot}/resources/dictionary.html#dstOrdered">See Destination Ordered</a>
    * @param dstMem     <a href="{@docRoot}/resources/dictionary.html#dstMem">See Destination Memory</a>.
    * @return this sketch as a CompactSketch in the chosen form
+=======
+  /**
+   * Ensures mutual exclusion. No other thread can update the shared sketch while propagation is
+   * in progress
+>>>>>>> remove cache limit, add concurrency error factor
    */
   @Override
   public CompactSketch compactShared(final boolean dstOrdered, final WritableMemory dstMem) {
@@ -251,7 +258,7 @@ class ConcurrentDirectThetaSketch extends DirectQuickSelectSketch
    */
   @Override
   public void propagate(final AtomicBoolean localPropagationInProgress,
-      final Sketch sketchIn, final long singleHash) {
+                        final Sketch sketchIn, final long singleHash) {
     final long epoch = epoch_;
     if ((singleHash != NOT_SINGLE_HASH)                   // namely, is a single hash and
         && (getRetainedEntries(false) < exactLimit_)) {   // a small sketch then propagate myself (blocking)
@@ -268,15 +275,18 @@ class ConcurrentDirectThetaSketch extends DirectQuickSelectSketch
     final ConcurrentBackgroundThetaPropagation job =
         new ConcurrentBackgroundThetaPropagation(this, localPropagationInProgress, sketchIn, singleHash,
             epoch);
-//    ConcurrentPropagationService.execute(job);
-    ConcurrentBackgroundThetaPropagation.propagationExecutorService.execute(job);
-//    propagationExecutorService_.execute(job);
+    ConcurrentPropagationService.execute(job);
   }
 
   @Override
   public long calcK() {
     final long k = 1 << getLgNomLongs();
     return k;
+  }
+
+  @Override
+  public double getError() {
+    return maxConcurrencyError_;
   }
 
   /**

@@ -70,7 +70,7 @@ public class ConcurrentHeapQuickSelectSketchTest {
     int u = 200*k;
     seed = DEFAULT_UPDATE_SEED;
     final UpdateSketchBuilder bldr = configureBuilderNotOrdered();
-    assertFalse(bldr.getCacheLimit() == 0);
+    assertFalse((1 << bldr.getLocalLgNominalEntries()) == 0);
     //must build shared first
     shared = bldr.buildSharedInternal(null);
     UpdateSketch usk = bldr.buildLocalInternal(shared);
@@ -382,15 +382,15 @@ public class ConcurrentHeapQuickSelectSketchTest {
   public void checkEstMode() {
     int k = 4096;
     lgK = 12;
-    int u = 2*k;
     seed = DEFAULT_UPDATE_SEED;
     final UpdateSketchBuilder bldr = configureBuilder();
     //must build shared first
     shared = bldr.buildSharedInternal(null);
-    UpdateSketch usk = bldr.buildLocalInternal(shared);
+    ConcurrentHeapThetaBuffer usk = bldr.buildLocalInternal(shared);
 
     assertTrue(usk.isEmpty());
 
+    int u = usk.getHashTableThreshold();
     for (int i = 0; i< u; i++) {
       usk.update(i);
     }
@@ -410,7 +410,7 @@ public class ConcurrentHeapQuickSelectSketchTest {
     UpdateSketch usk = buildConcSketch();
 
     //Exact mode
-    int limit = (int)ConcurrentSharedThetaSketch.getLimit(k);
+    int limit = (int)ConcurrentSharedThetaSketch.getLimit(k, 0);
     for (int i = 0; i < limit; i++ ) {
       usk.update(i);
     }
@@ -439,15 +439,15 @@ public class ConcurrentHeapQuickSelectSketchTest {
   public void checkRebuild() {
     int k = 16;
     lgK = 4;
-    int u = 4*k;
 
     seed = DEFAULT_UPDATE_SEED;
     final UpdateSketchBuilder bldr = configureBuilder();
     //must build shared first
     shared = bldr.buildSharedInternal(null);
-    UpdateSketch usk = bldr.buildLocalInternal(shared);
+    ConcurrentHeapThetaBuffer usk = bldr.buildLocalInternal(shared);
 
     assertTrue(usk.isEmpty());
+    int u = usk.getHashTableThreshold();
 
     for (int i = 0; i< u; i++) {
       usk.update(i);
@@ -503,7 +503,6 @@ public class ConcurrentHeapQuickSelectSketchTest {
   public void checkResetAndStartingSubMultiple() {
     int k = 512;
     lgK = 9;
-    int u = 4*k;
 
     final UpdateSketchBuilder bldr = configureBuilder();
     //must build shared first
@@ -512,12 +511,17 @@ public class ConcurrentHeapQuickSelectSketchTest {
     ConcurrentHeapThetaBuffer sk1 = (ConcurrentHeapThetaBuffer)usk; //for internal checks
 
     assertTrue(usk.isEmpty());
+    int u = sk1.getHashTableThreshold();
 
     for (int i = 0; i< u; i++) { usk.update(i); }
     waitForPropagationToComplete();
 
     assertFalse(usk.isEmpty());
     assertTrue(shared.getSharedRetainedEntries(false) > k);
+
+    for (int i = u; i< 4*k; i++) { usk.update(i); }
+    waitForPropagationToComplete();
+
     assertTrue(sk1.getThetaLong() < Long.MAX_VALUE);
 
     shared.resetShared();
@@ -703,7 +707,6 @@ public class ConcurrentHeapQuickSelectSketchTest {
     bldr.setSeed(seed);
     bldr.setSharedIsDirect(false);
     bldr.setPropagateOrderedCompact(false);
-    bldr.setCacheLimit(16);
     return bldr;
   }
 
@@ -722,7 +725,6 @@ public class ConcurrentHeapQuickSelectSketchTest {
   private UpdateSketchBuilder configureBuilderWithCache() {
     final UpdateSketchBuilder bldr = configureBuilder();
     int k = 1 << lgK;
-    bldr.setCacheLimit(k);
     return bldr;
   }
 
